@@ -51,7 +51,7 @@ async def download_png(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         soup = BeautifulSoup(response.text, "html.parser")
 
         # Find the download link
-        download_link = soup.find("a", class_="download-btn")
+        download_link = soup.find("a", string="Free Download")
         if not download_link or not download_link.has_attr('href'):
             await update.message.reply_text("Could not find the download link on the page. Please make sure the URL is correct.")
             return
