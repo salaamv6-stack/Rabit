@@ -44,8 +44,8 @@ async def download_png(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
         # Find the download link
         download_link = soup.find("a", class_="download-btn")
-        if not download_link:
-            await update.message.reply_text("Could not find the download link on the page.")
+        if not download_link or not download_link.has_attr('href'):
+            await update.message.reply_text("Could not find the download link on the page. Please make sure the URL is correct.")
             return
 
         png_url = download_link["href"]
@@ -53,6 +53,11 @@ async def download_png(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         # Download the PNG
         png_response = requests.get(png_url)
         png_response.raise_for_status()
+
+        # Check if the downloaded file is a PNG
+        if "image/png" not in png_response.headers.get("Content-Type", ""):
+            await update.message.reply_text("The downloaded file is not a PNG. Please try a different URL.")
+            return
 
         # Save the PNG
         file_name = url.split("/")[-2] + ".png"
@@ -65,9 +70,12 @@ async def download_png(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         # Clean up the file
         os.remove(file_name)
 
+    except requests.exceptions.HTTPError as e:
+        logger.error(f"HTTP Error: {e}")
+        await update.message.reply_text(f"Sorry, I could not access the URL. Status code: {e.response.status_code}")
     except requests.exceptions.RequestException as e:
         logger.error(f"Error fetching URL: {e}")
-        await update.message.reply_text("Sorry, I could not process the URL. Please try again.")
+        await update.message.reply_text("Sorry, I could not process the URL. Please check the link and your internet connection.")
     except Exception as e:
         logger.error(f"An error occurred: {e}")
         await update.message.reply_text("An unexpected error occurred. Please try again later.")
