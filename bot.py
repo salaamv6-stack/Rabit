@@ -3,8 +3,13 @@ import logging
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import requests
-from bs4 import BeautifulSoup
 import os
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
+import time
 
 # Enable logging
 logging.basicConfig(
@@ -31,32 +36,35 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(welcome_message)
 
 async def download_png(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Download the PNG from a cleanpng.com URL."""
+    """Download the PNG from a cleanpng.com URL using Selenium."""
     url = update.message.text
     if "cleanpng.com" not in url:
         await update.message.reply_text("Please send a valid URL from cleanpng.com.")
         return
 
     try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Connection': 'keep-alive',
-            'Referer': 'https://www.google.com/'
-        }
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, "html.parser")
+        # Set up Chrome options
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+
+        # Set up webdriver
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+
+        driver.get(url)
+        time.sleep(5)  # Wait for the page to load
 
         # Find the download link
-        download_link = soup.find("a", string="Free Download")
-        if not download_link or not download_link.has_attr('href'):
+        download_link = driver.find_element(By.LINK_TEXT, "Free Download")
+        png_url = download_link.get_attribute('href')
+
+        driver.quit()
+
+        if not png_url:
             await update.message.reply_text("Could not find the download link on the page. Please make sure the URL is correct.")
             return
-
-        png_url = download_link["href"]
 
         # Download the PNG
         png_response = requests.get(png_url)
@@ -78,12 +86,6 @@ async def download_png(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         # Clean up the file
         os.remove(file_name)
 
-    except requests.exceptions.HTTPError as e:
-        logger.error(f"HTTP Error: {e}")
-        await update.message.reply_text(f"Sorry, I could not access the URL. Status code: {e.response.status_code}")
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Error fetching URL: {e}")
-        await update.message.reply_text("Sorry, I could not process the URL. Please check the link and your internet connection.")
     except Exception as e:
         logger.error(f"An error occurred: {e}")
         await update.message.reply_text("An unexpected error occurred. Please try again later.")
